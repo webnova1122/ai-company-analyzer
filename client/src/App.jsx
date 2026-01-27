@@ -1,22 +1,41 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import CompanyForm from './components/CompanyForm';
 import AnalysisResults from './components/AnalysisResults';
 import BusinessPlanViewer from './components/BusinessPlanViewer';
+import PaymentGateway from './components/PaymentGateway';
 import Header from './components/Header';
+import ErrorBoundary from './components/ErrorBoundary';
 
 function App() {
-  const [currentView, setCurrentView] = useState('form'); // 'form', 'analysis', 'plan'
+  const [currentView, setCurrentView] = useState('form'); // 'form', 'payment', 'analysis', 'plan'
   const [companyData, setCompanyData] = useState(null);
   const [analysisResults, setAnalysisResults] = useState(null);
   const [businessPlan, setBusinessPlan] = useState(null);
+  const [discountCode, setDiscountCode] = useState(null);
+  const [paymentInfo, setPaymentInfo] = useState(null);
 
   const handleFormSubmit = (data) => {
     setCompanyData(data);
+    // Move to payment - email will be collected there
+    setCurrentView('payment');
+  };
+
+  const handlePaymentComplete = async (payment) => {
+    setPaymentInfo(payment);
+    setCurrentView('analysis');
+    // Trigger analysis generation automatically after payment
+    try {
+      const { analyzeCompany } = await import('./services/api');
+      const results = await analyzeCompany(companyData);
+      setAnalysisResults(results);
+    } catch (error) {
+      console.error('Failed to generate analysis:', error);
+      // Still show the analysis view, but AnalysisResults will handle the error
+    }
   };
 
   const handleAnalysisComplete = (results) => {
     setAnalysisResults(results);
-    setCurrentView('analysis');
   };
 
   const handlePlanGenerated = (plan) => {
@@ -25,10 +44,25 @@ function App() {
   };
 
   const handleStartOver = () => {
+    // Clear saved form data when starting over
+    try {
+      localStorage.removeItem('ai-company-analyzer-form-data');
+      localStorage.removeItem('ai-company-analyzer-current-step');
+      localStorage.removeItem('ai-company-analyzer-payment-data');
+    } catch (error) {
+      console.error('Error clearing saved data:', error);
+    }
+    
     setCurrentView('form');
     setCompanyData(null);
     setAnalysisResults(null);
     setBusinessPlan(null);
+    setPaymentInfo(null);
+    setDiscountCode(null);
+  };
+
+  const handleCancelPayment = () => {
+    setCurrentView('form');
   };
 
   const handleBackToAnalysis = () => {
@@ -36,41 +70,53 @@ function App() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-      <Header onStartOver={handleStartOver} showStartOver={currentView !== 'form'} />
-      
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {currentView === 'form' && (
-          <CompanyForm 
-            onSubmit={handleFormSubmit}
-            onAnalysisComplete={handleAnalysisComplete}
-            initialData={companyData}
-          />
-        )}
+    <ErrorBoundary onReset={handleStartOver}>
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+        <Header onStartOver={handleStartOver} showStartOver={currentView !== 'form'} />
         
-        {currentView === 'analysis' && analysisResults && (
-          <AnalysisResults 
-            results={analysisResults}
-            companyData={companyData}
-            onGeneratePlan={handlePlanGenerated}
-            onStartOver={handleStartOver}
-          />
-        )}
-        
-        {currentView === 'plan' && businessPlan && (
-          <BusinessPlanViewer 
-            plan={businessPlan}
-            companyData={companyData}
-            onBack={handleBackToAnalysis}
-            onStartOver={handleStartOver}
-          />
-        )}
-      </main>
+        <main className="max-w-6xl mx-auto px-4 py-8">
+          {currentView === 'form' && (
+            <CompanyForm 
+              onSubmit={handleFormSubmit}
+              initialData={companyData}
+            />
+          )}
+          
+          {currentView === 'payment' && companyData && (
+            <PaymentGateway
+              companyData={companyData}
+              discountCode={discountCode}
+              onPaymentComplete={handlePaymentComplete}
+              onCancel={handleCancelPayment}
+            />
+          )}
+          
+          {currentView === 'analysis' && paymentInfo && (
+            <AnalysisResults 
+              results={analysisResults}
+              companyData={companyData}
+              paymentInfo={paymentInfo}
+              onGeneratePlan={handlePlanGenerated}
+              onStartOver={handleStartOver}
+              onAnalysisComplete={handleAnalysisComplete}
+            />
+          )}
+          
+          {currentView === 'plan' && businessPlan && (
+            <BusinessPlanViewer 
+              plan={businessPlan}
+              companyData={companyData}
+              onBack={handleBackToAnalysis}
+              onStartOver={handleStartOver}
+            />
+          )}
+        </main>
 
-      <footer className="text-center py-8 text-gray-500 text-sm">
-        <p>AI Company Analyzer - Your AI-Powered Business Consultant</p>
-      </footer>
-    </div>
+        <footer className="text-center py-8 text-gray-500 text-sm">
+          <p>AI Company Analyzer - Your AI-Powered Business Consultant</p>
+        </footer>
+      </div>
+    </ErrorBoundary>
   );
 }
 

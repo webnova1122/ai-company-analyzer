@@ -1,10 +1,17 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import './config/database.js'; // Initialize SQLite database
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 import analysisRoutes from './routes/analysis.js';
+import paymentRoutes from './routes/payment.js';
+import emailRoutes from './routes/email.js';
 
-dotenv.config({ path: '../.env' });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
+// Load .env from project root (one level up from server directory)
+dotenv.config({ path: join(__dirname, '..', '.env') });
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -15,6 +22,8 @@ app.use(express.json());
 
 // Routes
 app.use('/api', analysisRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/email', emailRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

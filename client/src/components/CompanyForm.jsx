@@ -1,10 +1,26 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { analyzeCompany } from '../services/api';
+import LoadingSpinner from './LoadingSpinner';
+import ProgressIndicator from './ProgressIndicator';
+import StepHeader from './StepHeader';
+import {
+  renderEnhancedBasicsStep,
+  renderEnhancedProductsStep,
+  renderOperationsStep,
+  renderEnhancedFinancialsStep,
+  renderMarketingStep,
+  renderEnhancedGoalsStep
+} from './CompanyFormSteps';
+
+const STORAGE_KEY = 'ai-company-analyzer-form-data';
+const STORAGE_STEP_KEY = 'ai-company-analyzer-current-step';
 
 const STEPS = [
   { id: 'basics', title: 'Company Basics', icon: 'building' },
   { id: 'products', title: 'Products & Market', icon: 'cube' },
+  { id: 'operations', title: 'Operations & Strategy', icon: 'cog' },
   { id: 'financials', title: 'Financials & Team', icon: 'chart' },
+  { id: 'marketing', title: 'Marketing & Sales', icon: 'megaphone' },
   { id: 'goals', title: 'Goals & Challenges', icon: 'flag' },
 ];
 
@@ -23,40 +39,127 @@ const STAGES = [
 ];
 
 function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
-  const [currentStep, setCurrentStep] = useState(0);
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState(null);
-  
-  const [formData, setFormData] = useState(initialData || {
+  // Load saved data from localStorage or use initialData
+  const loadSavedData = () => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const savedStep = localStorage.getItem(STORAGE_STEP_KEY);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return { data: parsed, step: savedStep ? parseInt(savedStep) : 0 };
+      }
+    } catch (error) {
+      console.error('Error loading saved form data:', error);
+    }
+    return { data: null, step: 0 };
+  };
+
+  const { data: savedData, step: savedStep } = loadSavedData();
+  const defaultFormData = {
+    // Company basics
     companyName: '',
     industry: '',
     stage: '',
     description: '',
+    foundedYear: '',
+    
+    // Products & Market
     products: '',
     targetMarket: '',
     competitors: '',
+    uniqueValue: '',
+    marketTrends: '',
+    
+    // Operations & Strategy
+    businessModel: '',
+    keyPartners: '',
+    operations: '',
+    technology: '',
+    
+    // Financials & Team
     revenue: '',
     funding: '',
     teamSize: '',
+    keyRoles: '',
+    burnRate: '',
+    
+    // Marketing & Sales
+    customerAcquisition: '',
+    salesChannels: '',
+    pricingStrategy: '',
+    marketingBudget: '',
+    
+    // Goals & Challenges
     challenges: '',
     goals: '',
-  });
+    timeline: '',
+    successMetrics: '',
+  };
+
+  const [currentStep, setCurrentStep] = useState(savedStep || 0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [showSavedIndicator, setShowSavedIndicator] = useState(false);
+  const [isRestored, setIsRestored] = useState(false);
+  const formRef = useRef(null);
+  
+  // Show indicator when data is restored on mount
+  useEffect(() => {
+    if (savedData && Object.keys(savedData).length > 0 && savedData.companyName) {
+      setIsRestored(true);
+      setShowSavedIndicator(true);
+      setTimeout(() => {
+        setShowSavedIndicator(false);
+        setIsRestored(false);
+      }, 3000);
+    }
+  }, []);
+  
+  const [formData, setFormData] = useState(initialData || savedData || defaultFormData);
+
+  // Save to localStorage whenever formData changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(formData));
+      localStorage.setItem(STORAGE_STEP_KEY, currentStep.toString());
+      // Show brief save indicator
+      setShowSavedIndicator(true);
+      const timer = setTimeout(() => setShowSavedIndicator(false), 1000);
+      return () => clearTimeout(timer);
+    } catch (error) {
+      console.error('Error saving form data:', error);
+    }
+  }, [formData, currentStep]);
 
   const updateField = (field, value) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData(prev => {
+      const updated = { ...prev, [field]: value };
+      // Save immediately when field updates
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+      } catch (error) {
+        console.error('Error saving form data:', error);
+      }
+      return updated;
+    });
     setError(null);
   };
 
   const validateStep = () => {
     switch (currentStep) {
-      case 0:
+      case 0: // Basics
         if (!formData.companyName.trim()) return 'Company name is required';
         if (!formData.industry) return 'Please select an industry';
         if (!formData.stage) return 'Please select company stage';
         break;
-      case 1:
+      case 1: // Products
         if (!formData.products.trim()) return 'Please describe your products/services';
         if (!formData.targetMarket.trim()) return 'Please describe your target market';
+        break;
+      case 2: // Operations - optional
+      case 3: // Financials - optional
+      case 4: // Marketing - optional
+      case 5: // Goals - optional
         break;
       default:
         return null;
@@ -80,285 +183,194 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    e.stopPropagation();
+    
+    // Ensure we're on the last step before submitting
+    if (currentStep !== STEPS.length - 1) {
+      // If not on last step, just go to next step instead
+      handleNext();
+      return;
+    }
+    
     const validationError = validateStep();
     if (validationError) {
       setError(validationError);
       return;
     }
 
+    // Get the latest form data directly from form inputs to ensure we capture
+    // challenges and goals even if React state hasn't updated yet
+    const formElement = formRef.current;
+    const finalFormData = { ...formData };
+    
+    if (formElement) {
+      // Use FormData API to get the absolute latest values from all form inputs
+      const formDataObj = new FormData(formElement);
+      
+      // Update finalFormData with values from form inputs
+      for (const [key, value] of formDataObj.entries()) {
+        if (finalFormData.hasOwnProperty(key)) {
+          finalFormData[key] = value;
+        }
+      }
+      
+      // Specifically ensure challenges and goals are captured from named textareas
+      const challengesInput = formElement.querySelector('textarea[name="challenges"]');
+      const goalsInput = formElement.querySelector('textarea[name="goals"]');
+      
+      if (challengesInput) {
+        finalFormData.challenges = challengesInput.value;
+      }
+      if (goalsInput) {
+        finalFormData.goals = goalsInput.value;
+      }
+    }
+    
     setIsLoading(true);
     setError(null);
 
     try {
-      onSubmit(formData);
-      const results = await analyzeCompany(formData);
+      // Clear saved data on successful submit
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_STEP_KEY);
+      } catch (error) {
+        console.error('Error clearing saved data:', error);
+      }
+
+      onSubmit(finalFormData);
+      const results = await analyzeCompany(finalFormData);
       onAnalysisComplete(results);
     } catch (err) {
       setError(err.message || 'Failed to analyze company. Please try again.');
-    } finally {
       setIsLoading(false);
     }
   };
 
   const renderStepIndicator = () => (
-    <div className="flex items-center justify-center mb-8">
+    <div className="flex items-center justify-center mb-6 overflow-x-auto pb-2">
       {STEPS.map((step, index) => (
-        <div key={step.id} className="flex items-center">
+        <div key={step.id} className="flex items-center flex-shrink-0">
           <div 
-            className={`w-10 h-10 rounded-full flex items-center justify-center font-medium transition-colors
-              ${index < currentStep ? 'bg-primary-600 text-white' : 
-                index === currentStep ? 'bg-primary-600 text-white ring-4 ring-primary-100' : 
-                'bg-gray-200 text-gray-500'}`}
+            className={`w-12 h-12 rounded-full flex items-center justify-center font-bold transition-all transform hover:scale-110
+              ${index < currentStep ? 'bg-gradient-to-br from-green-500 to-green-600 text-white shadow-lg' : 
+                index === currentStep ? 'bg-gradient-to-br from-primary-500 to-primary-600 text-white ring-4 ring-primary-200 shadow-xl scale-110' : 
+                'bg-gray-200 text-gray-400'}`}
           >
             {index < currentStep ? (
-              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
               </svg>
             ) : (
-              index + 1
+              <span className="text-sm">{index + 1}</span>
             )}
           </div>
           {index < STEPS.length - 1 && (
-            <div className={`w-16 h-1 mx-2 rounded ${index < currentStep ? 'bg-primary-600' : 'bg-gray-200'}`} />
+            <div className={`w-12 h-1 mx-1 rounded transition-all ${index < currentStep ? 'bg-gradient-to-r from-green-500 to-primary-500' : 'bg-gray-200'}`} />
           )}
         </div>
       ))}
     </div>
   );
 
-  const renderBasicsStep = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Company Name <span className="text-red-500">*</span>
-        </label>
-        <input
-          type="text"
-          value={formData.companyName}
-          onChange={(e) => updateField('companyName', e.target.value)}
-          className="input-field"
-          placeholder="Enter your company name"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Industry <span className="text-red-500">*</span>
-        </label>
-        <select
-          value={formData.industry}
-          onChange={(e) => updateField('industry', e.target.value)}
-          className="input-field"
-        >
-          <option value="">Select an industry</option>
-          {INDUSTRIES.map(industry => (
-            <option key={industry} value={industry}>{industry}</option>
-          ))}
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Company Stage <span className="text-red-500">*</span>
-        </label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {STAGES.map(stage => (
-            <button
-              key={stage.value}
-              type="button"
-              onClick={() => updateField('stage', stage.value)}
-              className={`p-3 rounded-lg border-2 text-left transition-all
-                ${formData.stage === stage.value 
-                  ? 'border-primary-500 bg-primary-50 text-primary-700' 
-                  : 'border-gray-200 hover:border-gray-300'}`}
-            >
-              <span className="font-medium">{stage.label}</span>
-            </button>
-          ))}
-        </div>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Company Description
-        </label>
-        <textarea
-          value={formData.description}
-          onChange={(e) => updateField('description', e.target.value)}
-          className="input-field h-24 resize-none"
-          placeholder="Brief description of your company..."
-        />
-      </div>
-    </div>
-  );
-
-  const renderProductsStep = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Products/Services <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={formData.products}
-          onChange={(e) => updateField('products', e.target.value)}
-          className="input-field h-28 resize-none"
-          placeholder="Describe your main products or services..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Target Market <span className="text-red-500">*</span>
-        </label>
-        <textarea
-          value={formData.targetMarket}
-          onChange={(e) => updateField('targetMarket', e.target.value)}
-          className="input-field h-24 resize-none"
-          placeholder="Who are your ideal customers? Describe demographics, behaviors, needs..."
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Main Competitors
-        </label>
-        <textarea
-          value={formData.competitors}
-          onChange={(e) => updateField('competitors', e.target.value)}
-          className="input-field h-20 resize-none"
-          placeholder="List your main competitors and how you differentiate..."
-        />
-      </div>
-    </div>
-  );
-
-  const renderFinancialsStep = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Current Revenue
-        </label>
-        <select
-          value={formData.revenue}
-          onChange={(e) => updateField('revenue', e.target.value)}
-          className="input-field"
-        >
-          <option value="">Select revenue range</option>
-          <option value="pre-revenue">Pre-revenue</option>
-          <option value="0-100k">$0 - $100K</option>
-          <option value="100k-500k">$100K - $500K</option>
-          <option value="500k-1m">$500K - $1M</option>
-          <option value="1m-5m">$1M - $5M</option>
-          <option value="5m-10m">$5M - $10M</option>
-          <option value="10m+">$10M+</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Funding Status
-        </label>
-        <select
-          value={formData.funding}
-          onChange={(e) => updateField('funding', e.target.value)}
-          className="input-field"
-        >
-          <option value="">Select funding status</option>
-          <option value="bootstrapped">Bootstrapped</option>
-          <option value="friends-family">Friends & Family</option>
-          <option value="angel">Angel Investment</option>
-          <option value="seed">Seed Round</option>
-          <option value="series-a">Series A</option>
-          <option value="series-b+">Series B+</option>
-          <option value="profitable">Profitable/Self-funded</option>
-        </select>
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Team Size
-        </label>
-        <select
-          value={formData.teamSize}
-          onChange={(e) => updateField('teamSize', e.target.value)}
-          className="input-field"
-        >
-          <option value="">Select team size</option>
-          <option value="solo">Solo Founder</option>
-          <option value="2-5">2-5 people</option>
-          <option value="6-10">6-10 people</option>
-          <option value="11-25">11-25 people</option>
-          <option value="26-50">26-50 people</option>
-          <option value="51-100">51-100 people</option>
-          <option value="100+">100+ people</option>
-        </select>
-      </div>
-    </div>
-  );
-
-  const renderGoalsStep = () => (
-    <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Current Challenges
-        </label>
-        <textarea
-          value={formData.challenges}
-          onChange={(e) => updateField('challenges', e.target.value)}
-          className="input-field h-28 resize-none"
-          placeholder="What are the main challenges your company is facing? (e.g., scaling, hiring, funding, product-market fit...)"
-        />
-      </div>
-
-      <div>
-        <label className="block text-sm font-medium text-gray-700 mb-2">
-          Business Goals
-        </label>
-        <textarea
-          value={formData.goals}
-          onChange={(e) => updateField('goals', e.target.value)}
-          className="input-field h-28 resize-none"
-          placeholder="What are your short-term and long-term business goals? (e.g., revenue targets, market expansion, product launches...)"
-        />
-      </div>
-    </div>
-  );
-
   const renderCurrentStep = () => {
     switch (currentStep) {
-      case 0: return renderBasicsStep();
-      case 1: return renderProductsStep();
-      case 2: return renderFinancialsStep();
-      case 3: return renderGoalsStep();
+      case 0: return renderEnhancedBasicsStep(formData, updateField);
+      case 1: return renderEnhancedProductsStep(formData, updateField);
+      case 2: return renderOperationsStep(formData, updateField);
+      case 3: return renderEnhancedFinancialsStep(formData, updateField);
+      case 4: return renderMarketingStep(formData, updateField);
+      case 5: return renderEnhancedGoalsStep(formData, updateField);
       default: return null;
     }
   };
 
   return (
     <div className="max-w-2xl mx-auto">
-      <div className="text-center mb-8">
-        <h2 className="text-3xl font-bold text-gray-900 mb-3">
-          Let's Analyze Your Company
+      {/* Saved indicator */}
+      {showSavedIndicator && (
+        <div className="fixed top-20 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 z-50 animate-fade-in">
+          <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-medium">
+            {isRestored ? 'Data restored' : 'Progress saved'}
+          </span>
+        </div>
+      )}
+      
+      <div className="text-center mb-8 animate-fade-in">
+        <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-100 to-blue-100 rounded-full mb-4">
+          <svg className="w-5 h-5 text-primary-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
+            <path fillRule="evenodd" d="M11.3 1.047a1 1 0 01.7.303l3 3a1 1 0 01-1.414 1.414l-1.483-1.483A9.481 9.481 0 003.348 2.74a1 1 0 00-.833.833 9.481 9.481 0 001.981 8.764l-1.483 1.483a1 1 0 101.414 1.414l3-3a1 1 0 010-1.414l-3-3a1 1 0 00-1.414 1.414l1.483 1.483a7.481 7.481 0 01-1.981-6.91 7.481 7.481 0 016.91-1.981l1.483-1.483a1 1 0 011.414 0z" clipRule="evenodd" />
+          </svg>
+          <span className="text-sm font-semibold text-primary-700">AI-Powered Analysis</span>
+        </div>
+        <h2 className="text-4xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-3">
+          Unlock Your Business Potential
         </h2>
-        <p className="text-gray-600">
-          Provide information about your business to receive AI-powered insights and a comprehensive business plan.
+        <p className="text-lg text-gray-600">
+          Get personalized insights, strategic recommendations, and a complete growth roadmap
         </p>
+        <div className="mt-4 flex items-center justify-center gap-4 text-sm text-gray-500">
+          <div className="flex items-center gap-1">
+            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>Instant Results</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>Expert Analysis</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <svg className="w-4 h-4 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+            </svg>
+            <span>Action Plans</span>
+          </div>
+        </div>
       </div>
 
-      {renderStepIndicator()}
+      <ProgressIndicator currentStep={currentStep} totalSteps={STEPS.length} />
 
-      <div className="card">
-        <div className="mb-6">
-          <h3 className="text-xl font-semibold text-gray-900">{STEPS[currentStep].title}</h3>
-          <p className="text-sm text-gray-500 mt-1">Step {currentStep + 1} of {STEPS.length}</p>
-        </div>
+      <div className="card transform transition-all hover:shadow-xl">
+        <StepHeader 
+          stepId={STEPS[currentStep].id}
+          title={STEPS[currentStep].title}
+          currentStep={currentStep}
+          totalSteps={STEPS.length}
+        />
 
-        <form onSubmit={handleSubmit}>
+        <form 
+          ref={formRef}
+          onSubmit={handleSubmit}
+          onKeyDown={(e) => {
+            // Prevent form submission on Enter key in textareas unless Ctrl/Cmd+Enter
+            if (e.key === 'Enter' && e.target.tagName === 'TEXTAREA') {
+              if (!(e.ctrlKey || e.metaKey)) {
+                e.preventDefault();
+                // Allow normal textarea behavior (new line) but prevent form submission
+                return;
+              }
+            }
+            // Prevent form submission on Enter key unless we're on the last step and submit button is focused
+            if (e.key === 'Enter' && currentStep < STEPS.length - 1 && e.target.tagName !== 'TEXTAREA') {
+              e.preventDefault();
+              handleNext();
+            }
+          }}
+        >
           {renderCurrentStep()}
 
           {error && (
-            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-600 text-sm">
-              {error}
+            <div className="mt-4 p-4 bg-red-50 border-l-4 border-red-500 rounded-r-lg text-red-700 text-sm flex items-start gap-2 animate-fade-in">
+              <svg className="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+              </svg>
+              <span>{error}</span>
             </div>
           )}
 
@@ -376,30 +388,33 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
               <button
                 type="button"
                 onClick={handleNext}
-                className="btn-primary"
+                className="btn-primary flex items-center justify-center gap-2 group relative overflow-hidden"
               >
-                Next Step
+                <span className="relative z-10 flex items-center gap-2">
+                  Continue
+                  <svg className="w-5 h-5 transform group-hover:translate-x-1 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-primary-600 to-primary-700 transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left"></div>
               </button>
             ) : (
               <button
                 type="submit"
                 disabled={isLoading}
-                className="btn-primary flex items-center gap-2"
+                className="btn-primary flex items-center justify-center gap-2 min-w-[200px] bg-gradient-to-r from-primary-600 to-primary-700 hover:from-primary-700 hover:to-primary-800 transform hover:scale-105 transition-all shadow-lg hover:shadow-xl"
               >
                 {isLoading ? (
                   <>
-                    <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Analyzing...
+                    <LoadingSpinner size="sm" text="" />
+                    <span>Generating Your Analysis...</span>
                   </>
                 ) : (
                   <>
                     <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                     </svg>
-                    Analyze Company
+                    <span className="font-semibold">Get My Analysis Now!</span>
                   </>
                 )}
               </button>
