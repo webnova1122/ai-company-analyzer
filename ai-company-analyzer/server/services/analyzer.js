@@ -1,4 +1,4 @@
-import { generateStructuredAnalysis, generateBusinessPlanContent } from './openai.js';
+import { generateStructuredAnalysis, generateBusinessPlanContent, generateStrategicPlanContent } from './openai.js';
 
 export async function analyzeCompany(companyData) {
   // Validate required fields
@@ -64,4 +64,22 @@ function generateTableOfContents() {
     { section: 'Action Plan & Milestones', page: 12 },
     { section: 'Risk Assessment', page: 13 }
   ];
+}
+
+export async function generateStrategicPlan(companyData, planLevel = 'premium') {
+  // Validate required fields
+  if (!companyData.companyName || !companyData.industry) {
+    throw new Error('Company name and industry are required');
+  }
+
+  // Generate strategic plan content
+  const strategicPlan = await generateStrategicPlanContent(companyData, planLevel);
+  
+  return {
+    companyName: companyData.companyName,
+    industry: companyData.industry,
+    planLevel,
+    generatedAt: new Date().toISOString(),
+    content: strategicPlan
+  };
 }

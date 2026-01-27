@@ -1,9 +1,54 @@
-import { useState } from 'react';
-import { generateBusinessPlan } from '../services/api';
+import { useState, useEffect } from 'react';
+import { generateBusinessPlan, getAnalysisWithPayment } from '../services/api';
+import LoadingSpinner from './LoadingSpinner';
 
-function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) {
+function AnalysisResults({ results, companyData, paymentInfo, onGeneratePlan, onStartOver, onAnalysisComplete }) {
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(!results && paymentInfo);
   const [error, setError] = useState(null);
+  const [localResults, setLocalResults] = useState(results);
+
+  // Fetch analysis after payment
+  useEffect(() => {
+    if (paymentInfo && !results && !localResults) {
+      fetchPaidAnalysis();
+    }
+  }, [paymentInfo, results, localResults]);
+
+  const fetchPaidAnalysis = async () => {
+    setIsLoadingAnalysis(true);
+    setError(null);
+    try {
+      const analysis = await getAnalysisWithPayment(paymentInfo.transactionId, companyData);
+      setLocalResults(analysis);
+      onAnalysisComplete(analysis);
+    } catch (err) {
+      setError(err.message || 'Failed to load analysis');
+    } finally {
+      setIsLoadingAnalysis(false);
+    }
+  };
+
+  const displayResults = localResults || results;
+
+  if (isLoadingAnalysis) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px]">
+        <LoadingSpinner size="lg" text="" />
+        <p className="mt-4 text-lg font-medium text-gray-700">Generating your analysis...</p>
+        <p className="text-sm text-gray-500">This may take 30-60 seconds</p>
+      </div>
+    );
+  }
+
+  if (!displayResults) {
+    return (
+      <div className="card text-center">
+        <p className="text-gray-600">No analysis available. Please complete the form and payment.</p>
+        <button onClick={onStartOver} className="btn-primary mt-4">Start Over</button>
+      </div>
+    );
+  }
 
   const handleGeneratePlan = async () => {
     setIsGenerating(true);
@@ -44,17 +89,20 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
           </svg>
           Analysis Complete
         </div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-2">{results.companyName}</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-2">{displayResults.companyName}</h2>
         <p className="text-gray-600">{companyData.industry} | {companyData.stage}</p>
+        {paymentInfo && (
+          <p className="text-sm text-green-600 mt-2">✓ {paymentInfo.plan} Plan Activated</p>
+        )}
       </div>
 
       {/* Growth Score */}
       <div className="card mb-6 text-center">
         <h3 className="text-lg font-medium text-gray-700 mb-2">Growth Potential Score</h3>
-        <div className={`text-6xl font-bold ${getScoreColor(results.growthScore)}`}>
-          {results.growthScore}<span className="text-2xl text-gray-400">/10</span>
+        <div className={`text-6xl font-bold ${getScoreColor(displayResults.growthScore)}`}>
+          {displayResults.growthScore}<span className="text-2xl text-gray-400">/10</span>
         </div>
-        <p className="text-gray-500 mt-2">{results.summary}</p>
+        <p className="text-gray-500 mt-2">{displayResults.summary}</p>
       </div>
 
       {/* SWOT Analysis */}
@@ -68,7 +116,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Strengths
           </h3>
           <ul className="space-y-2">
-            {results.strengths?.map((item, index) => (
+            {displayResults.strengths?.map((item, index) => (
               <li key={index} className="flex items-start gap-2 text-gray-700">
                 <span className="text-green-500 mt-1">+</span>
                 {item}
@@ -86,7 +134,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Weaknesses
           </h3>
           <ul className="space-y-2">
-            {results.weaknesses?.map((item, index) => (
+            {displayResults.weaknesses?.map((item, index) => (
               <li key={index} className="flex items-start gap-2 text-gray-700">
                 <span className="text-red-500 mt-1">-</span>
                 {item}
@@ -105,7 +153,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Opportunities
           </h3>
           <ul className="space-y-2">
-            {results.opportunities?.map((item, index) => (
+            {displayResults.opportunities?.map((item, index) => (
               <li key={index} className="flex items-start gap-2 text-gray-700">
                 <span className="text-blue-500 mt-1">→</span>
                 {item}
@@ -123,7 +171,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Threats
           </h3>
           <ul className="space-y-2">
-            {results.threats?.map((item, index) => (
+            {displayResults.threats?.map((item, index) => (
               <li key={index} className="flex items-start gap-2 text-gray-700">
                 <span className="text-yellow-500 mt-1">!</span>
                 {item}
@@ -141,7 +189,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
           </svg>
           Market Analysis
         </h3>
-        <p className="text-gray-700 leading-relaxed">{results.marketAnalysis}</p>
+        <p className="text-gray-700 leading-relaxed">{displayResults.marketAnalysis}</p>
       </div>
 
       {/* Competitive Position */}
@@ -152,11 +200,11 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
           </svg>
           Competitive Position
         </h3>
-        <p className="text-gray-700 leading-relaxed">{results.competitivePosition}</p>
+        <p className="text-gray-700 leading-relaxed">{displayResults.competitivePosition}</p>
       </div>
 
       {/* Risk Assessment */}
-      {results.riskAssessment && results.riskAssessment.length > 0 && (
+      {displayResults.riskAssessment && displayResults.riskAssessment.length > 0 && (
         <div className="card mb-6">
           <h3 className="section-title flex items-center gap-2">
             <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -165,7 +213,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Risk Assessment
           </h3>
           <div className="space-y-4">
-            {results.riskAssessment.map((risk, index) => (
+            {displayResults.riskAssessment.map((risk, index) => (
               <div key={index} className="bg-gray-50 rounded-lg p-4">
                 <div className="flex items-start justify-between mb-2">
                   <span className="font-medium text-gray-900">{risk.risk}</span>
@@ -183,7 +231,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
       )}
 
       {/* Recommendations */}
-      {results.recommendations && results.recommendations.length > 0 && (
+      {displayResults.recommendations && displayResults.recommendations.length > 0 && (
         <div className="card mb-8">
           <h3 className="section-title flex items-center gap-2">
             <svg className="w-6 h-6 text-primary-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -192,7 +240,7 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
             Key Recommendations
           </h3>
           <ul className="space-y-3">
-            {results.recommendations.map((rec, index) => (
+            {displayResults.recommendations.map((rec, index) => (
               <li key={index} className="flex items-start gap-3 text-gray-700">
                 <span className="w-6 h-6 bg-primary-100 text-primary-700 rounded-full flex items-center justify-center text-sm font-medium flex-shrink-0">
                   {index + 1}
@@ -216,22 +264,19 @@ function AnalysisResults({ results, companyData, onGeneratePlan, onStartOver }) 
         <button
           onClick={handleGeneratePlan}
           disabled={isGenerating}
-          className="btn-primary flex items-center justify-center gap-2"
+          className="btn-primary flex items-center justify-center gap-2 min-w-[220px]"
         >
           {isGenerating ? (
             <>
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-              </svg>
-              Generating Business Plan...
+              <LoadingSpinner size="sm" text="" />
+              <span>Generating Business Plan...</span>
             </>
           ) : (
             <>
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
               </svg>
-              Generate Full Business Plan
+              <span>Generate Full Business Plan</span>
             </>
           )}
         </button>
