@@ -1,0 +1,14 @@
+{
+  "name": "ai-company-analyzer",
+  "version": "1.0.0",
+  "description": "AI-powered business consultant for company analysis and business plan generation",
+  "scripts": {
+    "dev": "concurrently \"npm run server\" \"npm run client\"",
+    "server": "cd server && npm run dev",
+    "client": "cd client && npm run dev",
+    "install-all": "npm install && cd server && npm install && cd ../client && npm install"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  }
+}
