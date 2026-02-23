@@ -43,7 +43,7 @@
 - [ ] **Delete a plan** — Button to delete a saved business plan (`DELETE /api/business-plan/:id`)
 
 ### UI & UX Improvements
-- [ ] **Loading skeletons** — Replace plain "loading..." text with animated skeleton placeholders while AI is working
+- [x-ayaan-the date ] **Loading skeletons** — Replace plain "loading..." text with animated skeleton placeholders while AI is working
 - [ ] **Toast notifications** — Show success/error pop-up messages instead of silent failures
 - [ ] **Dark mode toggle** — Add a light/dark theme switch in the header
 - [ ] **Mobile responsive fixes** — Audit and fix layout on small screens (< 640px)
