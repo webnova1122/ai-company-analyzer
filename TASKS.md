@@ -45,7 +45,7 @@
 ### UI & UX Improvements
 - [ ] **Loading skeletons** — Replace plain "loading..." text with animated skeleton placeholders while AI is working
 - [ ] **Toast notifications** — Show success/error pop-up messages instead of silent failures
-- [ ] **Dark mode toggle** — Add a light/dark theme switch in the header
+- [X-Fahad Alsaif-2026/2/23] **Dark mode toggle** — Add a light/dark theme switch in the header
 - [ ] **Mobile responsive fixes** — Audit and fix layout on small screens (< 640px)
 - [ ] **Form validation feedback** — Show inline error messages on required fields before submission
 - [ ] **Progress bar** — Show a progress indicator while the AI is generating (can take 10–20 seconds)
