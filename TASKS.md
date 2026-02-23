@@ -51,7 +51,7 @@
 - [ ] **Progress bar** — Show a progress indicator while the AI is generating (can take 10–20 seconds)
 
 ### Analysis & Plan Enhancements
-- [ ] **Competitor comparison** — Allow inputting 2 companies and comparing their analyses side by side
+- [ X-Ayaan Ahmed-2026/2/23] **Competitor comparison** — Allow inputting 2 companies and comparing their analyses side by side
 - [ ] **Industry benchmarks** — Show how the company scores vs industry average in the analysis results
 - [ ] **Charts & visualizations** — Add a bar/radar chart for SWOT scores and growth potential using Chart.js or Recharts
 - [ ] **Analysis history timeline** — Show how a company's analysis changed over multiple submissions
