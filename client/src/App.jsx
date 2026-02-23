@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import CompanyForm from './components/CompanyForm';
 import AnalysisResults from './components/AnalysisResults';
 import BusinessPlanViewer from './components/BusinessPlanViewer';
@@ -14,6 +14,9 @@ function App() {
   const [discountCode, setDiscountCode] = useState(null);
   const [paymentInfo, setPaymentInfo] = useState(null);
 
+  const companyDataRef = useRef(companyData);
+  companyDataRef.current = companyData;
+
   const handleFormSubmit = (data) => {
     setCompanyData(data);
     // Move to payment - email will be collected there
@@ -23,14 +26,14 @@ function App() {
   const handlePaymentComplete = async (payment) => {
     setPaymentInfo(payment);
     setCurrentView('analysis');
-    // Trigger analysis generation automatically after payment
+    const data = companyDataRef.current;
+    if (!data) return;
     try {
       const { analyzeCompany } = await import('./services/api');
-      const results = await analyzeCompany(companyData);
+      const results = await analyzeCompany(data);
       setAnalysisResults(results);
     } catch (error) {
       console.error('Failed to generate analysis:', error);
-      // Still show the analysis view, but AnalysisResults will handle the error
     }
   };
 
