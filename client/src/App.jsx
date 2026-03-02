@@ -10,6 +10,7 @@ function App() {
   const [currentView, setCurrentView] = useState('form'); // 'form', 'payment', 'analysis', 'plan'
   const [companyData, setCompanyData] = useState(null);
   const [analysisResults, setAnalysisResults] = useState(null);
+  const [analysisError, setAnalysisError] = useState(null);
   const [businessPlan, setBusinessPlan] = useState(null);
   const [discountCode, setDiscountCode] = useState(null);
   const [paymentInfo, setPaymentInfo] = useState(null);
@@ -25,15 +26,20 @@ function App() {
 
   const handlePaymentComplete = async (payment) => {
     setPaymentInfo(payment);
+    setAnalysisError(null);
     setCurrentView('analysis');
     const data = companyDataRef.current;
-    if (!data) return;
+    if (!data) {
+      setAnalysisError('Company data missing. Please start over.');
+      return;
+    }
     try {
       const { analyzeCompany } = await import('./services/api');
       const results = await analyzeCompany(data);
       setAnalysisResults(results);
     } catch (error) {
       console.error('Failed to generate analysis:', error);
+      setAnalysisError(error?.message || 'Failed to generate analysis. Check that the server is running and OPENAI_API_KEY is set in the server .env file.');
     }
   };
 
@@ -59,6 +65,7 @@ function App() {
     setCurrentView('form');
     setCompanyData(null);
     setAnalysisResults(null);
+    setAnalysisError(null);
     setBusinessPlan(null);
     setPaymentInfo(null);
     setDiscountCode(null);
@@ -95,10 +102,11 @@ function App() {
           )}
           
           {currentView === 'analysis' && paymentInfo && (
-            <AnalysisResults 
+            <AnalysisResults
               results={analysisResults}
               companyData={companyData}
               paymentInfo={paymentInfo}
+              initialError={analysisError}
               onGeneratePlan={handlePlanGenerated}
               onStartOver={handleStartOver}
               onAnalysisComplete={handleAnalysisComplete}

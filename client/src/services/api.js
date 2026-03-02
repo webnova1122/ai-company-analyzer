@@ -4,8 +4,9 @@ async function handleResponse(response) {
   if (!response.ok) {
     let errorMessage = 'An unexpected error occurred';
     try {
-      const error = await response.json();
-      errorMessage = error.error || error.message || errorMessage;
+      const data = await response.json();
+      // Prefer details (actual server error) then error/message
+      errorMessage = data.details || data.error || data.message || errorMessage;
     } catch {
       errorMessage = `Server error: ${response.status} ${response.statusText}`;
     }

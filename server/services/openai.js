@@ -1,10 +1,19 @@
 import OpenAI from 'openai';
 import dotenv from 'dotenv';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
 
-dotenv.config({ path: '../.env' });
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+// Load .env from project root (server/services -> server -> root)
+dotenv.config({ path: join(__dirname, '..', '..', '.env') });
 
+const apiKey = process.env.OPENAI_API_KEY;
+if (!apiKey || apiKey === 'your_openai_api_key_here') {
+  console.warn('OPENAI_API_KEY is missing or placeholder in .env. Analysis and business plan will fail until you add a valid key.');
+}
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: apiKey || 'not-set'
 });
 
 const SYSTEM_PROMPT = `You are an expert business consultant with 20+ years of experience helping companies succeed. You have deep expertise in:
@@ -19,7 +28,9 @@ Analyze the provided company data and generate comprehensive, actionable insight
 
 export async function generateCompletion(userPrompt, options = {}) {
   const { maxTokens = 4000, temperature = 0.7 } = options;
-  
+  if (!process.env.OPENAI_API_KEY || process.env.OPENAI_API_KEY === 'your_openai_api_key_here') {
+    throw new Error('OpenAI API key is missing or not configured. Add OPENAI_API_KEY to the .env file in the project root.');
+  }
   try {
     const response = await openai.chat.completions.create({
       model: 'gpt-4o',

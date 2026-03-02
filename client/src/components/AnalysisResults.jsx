@@ -2,16 +2,25 @@ import { useState, useEffect } from 'react';
 import { generateBusinessPlan, analyzeCompany } from '../services/api';
 import LoadingSpinner from './LoadingSpinner';
 
-function AnalysisResults({ results, companyData, paymentInfo, onGeneratePlan, onStartOver, onAnalysisComplete }) {
+function AnalysisResults({ results, companyData, paymentInfo, initialError, onGeneratePlan, onStartOver, onAnalysisComplete }) {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(!results);
-  const [error, setError] = useState(null);
+  const [isLoadingAnalysis, setIsLoadingAnalysis] = useState(!results && !initialError);
+  const [error, setError] = useState(initialError || null);
   const [analysisData, setAnalysisData] = useState(results);
 
-  // Auto-generate analysis if not available yet
+  // When parent passes a new initialError (e.g. after payment), show it
   useEffect(() => {
-    if (!analysisData && companyData && paymentInfo) {
+    if (initialError) {
+      setError(initialError);
+      setIsLoadingAnalysis(false);
+    }
+  }, [initialError]);
+
+  // Auto-generate analysis if not available yet and no error
+  useEffect(() => {
+    if (!analysisData && !error && companyData && paymentInfo) {
       setIsLoadingAnalysis(true);
+      setError(null);
       analyzeCompany(companyData)
         .then((analysis) => {
           setAnalysisData(analysis);
@@ -25,7 +34,7 @@ function AnalysisResults({ results, companyData, paymentInfo, onGeneratePlan, on
           setIsLoadingAnalysis(false);
         });
     }
-  }, [analysisData, companyData, paymentInfo, onAnalysisComplete]);
+  }, [analysisData, companyData, paymentInfo, onAnalysisComplete, error]);
 
   // Use analysisData if available, otherwise fall back to results prop
   const displayResults = analysisData || results;
@@ -82,7 +91,8 @@ function AnalysisResults({ results, companyData, paymentInfo, onGeneratePlan, on
             </svg>
           </div>
           <h3 className="text-xl font-bold text-gray-900 mb-2">Analysis Failed</h3>
-          <p className="text-gray-600 mb-6">{error}</p>
+          <p className="text-gray-600 mb-4">{error}</p>
+          <p className="text-sm text-gray-500 mb-6">Make sure the server is running (e.g. <code className="bg-gray-100 px-1 rounded">npm run server</code>) and that <code className="bg-gray-100 px-1 rounded">OPENAI_API_KEY</code> is set in the project root <code className="bg-gray-100 px-1 rounded">.env</code> file.</p>
           <button onClick={onStartOver} className="btn-primary">
             Try Again
           </button>

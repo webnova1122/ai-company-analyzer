@@ -21,7 +21,11 @@ router.post('/analyze', async (req, res) => {
     res.json(analysis);
   } catch (error) {
     console.error('Analysis error:', error);
-    res.status(500).json({ error: 'Failed to analyze company data', details: error.message });
+    const message = error?.message || String(error);
+    res.status(500).json({
+      error: 'Failed to analyze company data',
+      details: message
+    });
   }
 });
 
