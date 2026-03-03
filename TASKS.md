@@ -33,9 +33,9 @@
 - [ ] **List all saved plans** — API endpoint `GET /api/business-plans` returning all stored plans
 
 ### User Accounts & Auth
-- [ ] **User registration & login** — Add JWT-based auth so each user has their own account. New files: `server/routes/auth.js`, `server/middleware/auth.js`
+- [ X-Ayaan Ahmed 4/3/25] **User registration & login** — Add JWT-based auth so each user has their own account. New files: `server/routes/auth.js`, `server/middleware/auth.js`
 - [ ] **Protect routes** — Only logged-in users can generate and view plans
-- [ ] **Link plans to users** — Each plan belongs to a user account
+- [ X-Ayaanahmed 4/3/25] **Link plans to users** — Each plan belongs to a user account
 
 ### Dashboard & History
 - [ ] **Plans history page** — New frontend page showing all previously generated plans for the logged-in user
