@@ -40,6 +40,7 @@ async function initDatabase() {
     CREATE TABLE IF NOT EXISTS business_plans (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       planId TEXT UNIQUE NOT NULL,
+      userId TEXT,
       companyData TEXT NOT NULL,
       executiveSummary TEXT,
       companyDescription TEXT,
@@ -60,6 +61,18 @@ async function initDatabase() {
   db.run(`
     CREATE INDEX IF NOT EXISTS idx_planId ON business_plans(planId)
   `);
+
+  // Create index on userId for fetching user's plans
+  db.run(`
+    CREATE INDEX IF NOT EXISTS idx_userId ON business_plans(userId)
+  `);
+
+  // Add userId column to existing tables (safe to run multiple times — SQLite ignores if it exists)
+  try {
+    db.run(`ALTER TABLE business_plans ADD COLUMN userId TEXT`);
+  } catch {
+    // Column already exists
+  }
 
   // Save database to file
   saveDatabase();

@@ -1,11 +1,22 @@
+import { auth } from '../firebase.js';
+
 const API_BASE = '/api';
+
+async function getAuthHeaders() {
+  const headers = { 'Content-Type': 'application/json' };
+  const user = auth.currentUser;
+  if (user) {
+    const token = await user.getIdToken();
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 async function handleResponse(response) {
   if (!response.ok) {
     let errorMessage = 'An unexpected error occurred';
     try {
       const data = await response.json();
-      // Prefer details (actual server error) then error/message
       errorMessage = data.details || data.error || data.message || errorMessage;
     } catch {
       errorMessage = `Server error: ${response.status} ${response.statusText}`;
@@ -16,11 +27,10 @@ async function handleResponse(response) {
 }
 
 export async function analyzeCompany(companyData) {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/analyze`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(companyData),
   });
 
@@ -28,11 +38,10 @@ export async function analyzeCompany(companyData) {
 }
 
 export async function generateBusinessPlan(companyData) {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/business-plan`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(companyData),
   });
 
@@ -40,7 +49,8 @@ export async function generateBusinessPlan(companyData) {
 }
 
 export async function getBusinessPlan(planId) {
-  const response = await fetch(`${API_BASE}/business-plan/${planId}`);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE}/business-plan/${planId}`, { headers });
   return handleResponse(response);
 }
 
@@ -48,12 +58,17 @@ export function getBusinessPlanPDFUrl(planId) {
   return `${API_BASE}/business-plan/${planId}/pdf`;
 }
 
+export async function getMyPlans() {
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE}/my-plans`, { headers });
+  return handleResponse(response);
+}
+
 export async function processPayment(paymentData) {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/payment/process`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify(paymentData),
   });
 
@@ -61,11 +76,10 @@ export async function processPayment(paymentData) {
 }
 
 export async function getAnalysisWithPayment(transactionId, companyData) {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/analysis/paid`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ transactionId, companyData }),
   });
 
@@ -73,11 +87,10 @@ export async function getAnalysisWithPayment(transactionId, companyData) {
 }
 
 export async function sendDiscountEmail(email, discountCode) {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/email/discount`, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({ email, discountCode }),
   });
 
@@ -85,7 +98,8 @@ export async function sendDiscountEmail(email, discountCode) {
 }
 
 export async function downloadBusinessPlanPDF(planId, companyName) {
-  const response = await fetch(`${API_BASE}/business-plan/${planId}/pdf`);
+  const headers = await getAuthHeaders();
+  const response = await fetch(`${API_BASE}/business-plan/${planId}/pdf`, { headers });
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ error: 'Failed to download PDF' }));

@@ -3,11 +3,12 @@ import { analyzeCompany, generateBusinessPlan } from '../services/analyzer.js';
 import { generatePDF } from '../services/pdfGenerator.js';
 import { v4 as uuidv4 } from 'uuid';
 import BusinessPlan from '../models/BusinessPlan.js';
+import { requireAuth } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Analyze company data and return insights
-router.post('/analyze', async (req, res) => {
+router.post('/analyze', requireAuth, async (req, res) => {
   try {
     const companyData = req.body;
     
@@ -29,8 +30,8 @@ router.post('/analyze', async (req, res) => {
   }
 });
 
-// Generate full business plan
-router.post('/business-plan', async (req, res) => {
+// Generate full business plan (linked to user)
+router.post('/business-plan', requireAuth, async (req, res) => {
   try {
     const companyData = req.body;
     
@@ -43,9 +44,9 @@ router.post('/business-plan', async (req, res) => {
     const businessPlan = await generateBusinessPlan(companyData);
     const planId = uuidv4();
     
-    // Store the plan in the database
     const savedPlan = BusinessPlan.create({
       planId,
+      userId: req.user.uid,
       companyData,
       ...businessPlan
     });
@@ -60,14 +61,29 @@ router.post('/business-plan', async (req, res) => {
   }
 });
 
-// Download business plan as PDF
-router.get('/business-plan/:id/pdf', async (req, res) => {
+// Get all plans for the authenticated user
+router.get('/my-plans', requireAuth, (req, res) => {
+  try {
+    const plans = BusinessPlan.findByUserId(req.user.uid);
+    res.json(plans);
+  } catch (error) {
+    console.error('Error fetching user plans:', error);
+    res.status(500).json({ error: 'Failed to fetch plans', details: error.message });
+  }
+});
+
+// Download business plan as PDF (only if owned by user)
+router.get('/business-plan/:id/pdf', requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const plan = BusinessPlan.findById(id);
     
     if (!plan) {
       return res.status(404).json({ error: 'Business plan not found' });
+    }
+
+    if (plan.userId && plan.userId !== req.user.uid) {
+      return res.status(403).json({ error: 'You do not have access to this plan' });
     }
 
     const pdfBuffer = await generatePDF(plan);
@@ -81,14 +97,18 @@ router.get('/business-plan/:id/pdf', async (req, res) => {
   }
 });
 
-// Get stored business plan by ID
-router.get('/business-plan/:id', (req, res) => {
+// Get stored business plan by ID (only if owned by user)
+router.get('/business-plan/:id', requireAuth, (req, res) => {
   try {
     const { id } = req.params;
     const plan = BusinessPlan.findById(id);
     
     if (!plan) {
       return res.status(404).json({ error: 'Business plan not found' });
+    }
+
+    if (plan.userId && plan.userId !== req.user.uid) {
+      return res.status(403).json({ error: 'You do not have access to this plan' });
     }
     
     res.json(plan);
