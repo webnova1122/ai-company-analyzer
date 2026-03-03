@@ -57,7 +57,7 @@ const PRICING_PLANS = [
   }
 ];
 
-function PaymentGateway({ companyData, onPaymentComplete, onCancel, discountCode }) {
+function PaymentGateway({ companyData, companyDataB, onPaymentComplete, onCancel, discountCode }) {
   // Load saved payment data from localStorage
   const loadSavedPaymentData = () => {
     try {
@@ -207,7 +207,9 @@ function PaymentGateway({ companyData, onPaymentComplete, onCancel, discountCode
           Unlock Your Professional Analysis
         </h2>
         <p className="text-gray-600 mb-2">
-          Your detailed company analysis is ready. Choose your package to access your results.
+          {companyDataB
+            ? `Comparing ${companyData.companyName || 'Company A'} vs ${companyDataB.companyName || 'Company B'}. Choose your package to access side-by-side results.`
+            : 'Your detailed company analysis is ready. Choose your package to access your results.'}
         </p>
         <p className="text-sm text-gray-500">
           ✓ AI-powered insights ✓ Strategic recommendations ✓ Delivered instantly

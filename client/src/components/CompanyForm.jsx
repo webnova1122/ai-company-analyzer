@@ -38,9 +38,10 @@ const STAGES = [
   { value: 'enterprise', label: 'Enterprise' },
 ];
 
-function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
-  // Load saved data from localStorage or use initialData
+function CompanyForm({ onSubmit, onAnalysisComplete, initialData, companyLabel, compareMode, onToggleCompareMode, companyAName }) {
+  // Load saved data from localStorage or use initialData (skip saved data for Company B)
   const loadSavedData = () => {
+    if (companyLabel === 'Company B') return { data: null, step: 0 };
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       const savedStep = localStorage.getItem(STORAGE_STEP_KEY);
@@ -115,7 +116,19 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
     }
   }, []);
   
-  const [formData, setFormData] = useState(initialData || savedData || defaultFormData);
+  const [formData, setFormData] = useState(initialData ?? savedData ?? defaultFormData);
+
+  // When filling Company B, clear any Company A data from storage on mount
+  useEffect(() => {
+    if (companyLabel === 'Company B') {
+      try {
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem(STORAGE_STEP_KEY);
+      } catch (e) {
+        console.error('Error clearing form storage for Company B', e);
+      }
+    }
+  }, [companyLabel]);
 
   // Save to localStorage whenever formData changes
   useEffect(() => {
@@ -185,9 +198,7 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
     e.preventDefault();
     e.stopPropagation();
     
-    // Ensure we're on the last step before submitting
     if (currentStep !== STEPS.length - 1) {
-      // If not on last step, just go to next step instead
       handleNext();
       return;
     }
@@ -198,39 +209,26 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
       return;
     }
 
-    // Get the latest form data directly from form inputs to ensure we capture
-    // challenges and goals even if React state hasn't updated yet
     const formElement = formRef.current;
     const finalFormData = { ...formData };
     
     if (formElement) {
-      // Use FormData API to get the absolute latest values from all form inputs
       const formDataObj = new FormData(formElement);
-      
-      // Update finalFormData with values from form inputs
       for (const [key, value] of formDataObj.entries()) {
         if (finalFormData.hasOwnProperty(key)) {
           finalFormData[key] = value;
         }
       }
-      
-      // Specifically ensure challenges and goals are captured from named textareas
       const challengesInput = formElement.querySelector('textarea[name="challenges"]');
       const goalsInput = formElement.querySelector('textarea[name="goals"]');
-      
-      if (challengesInput) {
-        finalFormData.challenges = challengesInput.value;
-      }
-      if (goalsInput) {
-        finalFormData.goals = goalsInput.value;
-      }
+      if (challengesInput) finalFormData.challenges = challengesInput.value;
+      if (goalsInput) finalFormData.goals = goalsInput.value;
     }
     
     setIsLoading(true);
     setError(null);
 
     try {
-      // Clear saved data on successful submit
       try {
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem(STORAGE_STEP_KEY);
@@ -239,8 +237,14 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
       }
 
       onSubmit(finalFormData);
-      const results = await analyzeCompany(finalFormData);
-      onAnalysisComplete(results);
+      // Only run analysis in single-company flow (payment/analysis handled by App in compare flow)
+      if (compareMode) {
+        setIsLoading(false);
+      } else if (onAnalysisComplete) {
+        const results = await analyzeCompany(finalFormData);
+        onAnalysisComplete(results);
+        setIsLoading(false);
+      }
     } catch (err) {
       setError(err.message || 'Failed to analyze company. Please try again.');
       setIsLoading(false);
@@ -300,6 +304,29 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
       )}
       
       <div className="text-center mb-8 animate-fade-in">
+        {companyLabel && (
+          <div className={`inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-semibold mb-4 shadow-sm ${
+            companyLabel === 'Company B' ? 'bg-indigo-600 text-white ring-2 ring-indigo-200' : 'bg-indigo-100 text-indigo-800'
+          }`}>
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+            </svg>
+            {companyLabel === 'Company B' ? 'Now entering: Company B' : companyLabel}
+          </div>
+        )}
+        {!companyLabel && onToggleCompareMode && (
+          <button
+            type="button"
+            onClick={() => onToggleCompareMode(true)}
+            className="inline-flex items-center gap-2 px-4 py-2 text-primary-600 hover:text-primary-700 hover:bg-primary-50 rounded-full text-sm font-medium mb-4 transition-colors"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
+            </svg>
+            Compare two companies instead
+          </button>
+        )}
         <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-primary-100 to-blue-100 rounded-full mb-4">
           <svg className="w-5 h-5 text-primary-600 animate-pulse" fill="currentColor" viewBox="0 0 20 20">
             <path fillRule="evenodd" d="M11.3 1.047a1 1 0 01.7.303l3 3a1 1 0 01-1.414 1.414l-1.483-1.483A9.481 9.481 0 003.348 2.74a1 1 0 00-.833.833 9.481 9.481 0 001.981 8.764l-1.483 1.483a1 1 0 101.414 1.414l3-3a1 1 0 010-1.414l-3-3a1 1 0 00-1.414 1.414l1.483 1.483a7.481 7.481 0 01-1.981-6.91 7.481 7.481 0 016.91-1.981l1.483-1.483a1 1 0 011.414 0z" clipRule="evenodd" />
@@ -333,6 +360,27 @@ function CompanyForm({ onSubmit, onAnalysisComplete, initialData }) {
           </div>
         </div>
       </div>
+
+      {/* Transition banner: show when moving from Company A to Company B */}
+      {companyLabel === 'Company B' && companyAName && (
+        <div className="mb-6 rounded-xl border-2 border-indigo-200 bg-gradient-to-r from-indigo-50 to-white p-6 shadow-sm animate-fade-in">
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="flex items-center justify-center w-12 h-12 rounded-full bg-green-100 text-green-600 flex-shrink-0">
+              <svg className="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-semibold text-green-800">Company A added</p>
+              <p className="text-lg font-bold text-gray-900 mt-0.5">{companyAName}</p>
+              <p className="text-sm text-gray-600 mt-2">Now enter the details for <strong>Company B</strong> to compare side by side.</p>
+            </div>
+            <div className="flex items-center gap-2 px-4 py-2 bg-indigo-100 text-indigo-800 rounded-lg text-sm font-medium">
+              <span>Step 2 of 2</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ProgressIndicator currentStep={currentStep} totalSteps={STEPS.length} />
 
